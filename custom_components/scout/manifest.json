@@ -1,0 +1,11 @@
+{
+  "domain": "scout",
+  "name": "Scout",
+  "version": "1.0.0",
+  "documentation": "https://github.com/awendellpass/ha-scout",
+  "issue_tracker": "https://github.com/awendellpass/ha-scout/issues",
+  "requirements": [],
+  "dependencies": ["http", "frontend"],
+  "codeowners": ["@awendellpass"],
+  "iot_class": "cloud_polling"
+}
