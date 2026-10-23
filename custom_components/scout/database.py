@@ -181,12 +181,17 @@ def _listing(row: sqlite3.Row) -> dict:
     return d
 
 
-def upsert_ebay(hass: HomeAssistant, item_id: int, records: list[dict]) -> None:
+def upsert_ebay(hass: HomeAssistant, item_id: int, records: list[dict]) -> int:
     """Store one search's results and mark this item's eBay listings that
     weren't in it as gone. Only called after a successful search, so a
-    failed fetch never wipes the active set."""
+    failed fetch never wipes the active set. Returns how many were new."""
     now = _now()
     with _connect(hass) as conn:
+        known = {
+            row["external_id"] for row in conn.execute(
+                "SELECT external_id FROM listings WHERE item_id = ? AND source = 'ebay'", (item_id,)
+            )
+        }
         for r in records:
             conn.execute(
                 """
@@ -218,6 +223,7 @@ def upsert_ebay(hass: HomeAssistant, item_id: int, records: list[dict]) -> None:
             """,
             (item_id, *seen),
         )
+    return len(set(seen) - known)
 
 
 def add_manual(hass: HomeAssistant, item_id: int, data: dict) -> int:

@@ -208,6 +208,7 @@ async def async_refresh(hass: HomeAssistant) -> dict:
         conf = _conf(hass)
         items = {i["id"]: i for i in await _run(hass, database.get_items)}
         errors: list[str] = []
+        searched = new = 0
 
         if conf.get("ebay_app_id") and conf.get("ebay_cert_id"):
             for item in items.values():
@@ -215,7 +216,8 @@ async def async_refresh(hass: HomeAssistant) -> dict:
                     continue
                 try:
                     records = await _ebay_search(hass, item)
-                    await _run(hass, database.upsert_ebay, item["id"], records)
+                    new += await _run(hass, database.upsert_ebay, item["id"], records)
+                    searched += 1
                 except (*_NET_ERRORS, KeyError, ValueError) as err:
                     errors.append(f"{item['name']}: {type(err).__name__}: {err}")
                     if "token" in str(err):
@@ -228,6 +230,9 @@ async def async_refresh(hass: HomeAssistant) -> dict:
 
         await _run(hass, database.set_meta, "last_refresh", dt_util.now().isoformat(timespec="seconds"))
         await _run(hass, database.set_meta, "last_error", " | ".join(errors))
+        await _run(hass, database.set_meta, "last_summary",
+                   f"Searched {searched} item{'' if searched == 1 else 's'} · "
+                   f"{new} new listing{'' if new == 1 else 's'}")
         if errors:
             _LOGGER.warning("Scout: refresh had errors — %s", " | ".join(errors))
         else:
@@ -300,6 +305,7 @@ async def async_status(hass: HomeAssistant) -> dict:
         "manual_sources": MANUAL_SOURCES,
         "last_refresh": await _run(hass, database.get_meta, "last_refresh"),
         "last_error": await _run(hass, database.get_meta, "last_error") or "",
+        "last_summary": await _run(hass, database.get_meta, "last_summary") or "",
     }
 
 

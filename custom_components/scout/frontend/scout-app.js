@@ -5,6 +5,8 @@ const app = (() => {
   let view = 'deals';       // deals | watchlist | detail
   let refreshing = false;
   let retryTimer = null;
+  let flash = null;         // {text, err} shown under the header after a check
+  let flashTimer = null;
 
   const VERDICTS = {
     match: ['Match', 'green'],
@@ -78,16 +80,21 @@ const app = (() => {
   // ── Header / chrome ────────────────────────────────────────
 
   function header() {
+    // eBay is the only source Scout checks itself; the other sites are
+    // quick-search links on each item.
+    const ebayOn = !data || data.config.ebay;
+    const btn = ebayOn
+      ? `<button class="btn" onclick="app.refresh()" ${refreshing ? 'disabled' : ''}>${refreshing ? 'Checking eBay…' : 'Check eBay'}</button>`
+      : `<button class="btn" disabled title="Add eBay keys to turn on automatic checks. Other sites are the quick-search links on each item.">eBay off</button>`;
     return `
       <header>
         <div>
           <h1>Scout</h1>
           <div class="sub">Used-gear watchlist</div>
         </div>
-        <div class="hdr-actions">
-          <button class="btn" onclick="app.refresh()" ${refreshing ? 'disabled' : ''}>${refreshing ? 'Checking…' : 'Check now'}</button>
-        </div>
-      </header>`;
+        <div class="hdr-actions">${btn}</div>
+      </header>
+      ${flash ? `<div class="flash ${flash.err ? 'err' : ''}">${esc(flash.text)}</div>` : ''}`;
   }
 
   function tabs() {
@@ -103,7 +110,8 @@ const app = (() => {
     if (!data.config.ebay) {
       out.push(`<div class="banner"><strong>eBay checks are off.</strong> Add your eBay keys to the
         <code>scout:</code> block (see the README) to turn on automatic searches. Until then the
-        watchlist, quick-search links and logging finds by hand all work.</div>`);
+        watchlist, quick-search links and logging finds by hand all work. Scout never checks the
+        other sites itself; their links open a saved search for you.</div>`);
     }
     if (data.config.ebay && !data.config.model) {
       out.push(`<div class="banner"><strong>Listing review is off.</strong> Add <code>ollama_host</code>
@@ -485,11 +493,17 @@ const app = (() => {
     try {
       data = await api('POST', '/refresh');
       if (view === 'detail' && detail) detail = await api('GET', `/items/${detail.id}`);
+      flash = data.last_error
+        ? { text: 'Check finished with errors. See the bottom of the page.', err: true }
+        : { text: `Checked eBay · ${data.last_summary.replace(/^Searched /, '')}` };
     } catch (e) {
       if (data) data.last_error = e.message;
+      flash = { text: `Check failed: ${e.message}`, err: true };
     }
     refreshing = false;
     render();
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { flash = null; render(); }, 8000);
   }
 
   function show(v) {
